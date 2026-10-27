@@ -5,3 +5,4 @@ Laboratory works for **Techniques and Mechanisms of Software Design**, FAF-243.
 | Lab | Topic |
 |---|---|
 | [lab1](lab1/) | SOLID principles in Swift (SRP, OCP, DIP) |
+| [lab2](lab2/) | Creational design patterns in Swift (Singleton, Builder, Factory Method) |
