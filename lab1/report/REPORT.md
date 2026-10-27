@@ -77,6 +77,26 @@ lab1/
 
 The three patterns cooperate: the **Builder** creates orders and takes their numbers from the **Singleton**, and the **Factory Method** decides how each order is delivered.
 
+#### Diagram — how the three patterns cooperate
+
+```mermaid
+flowchart LR
+    Client["CreationalDemo<br/>(client code)"]
+    B["OrderBuilder<br/>«Builder»"]
+    S["OrderNumberGenerator.shared<br/>«Singleton»"]
+    O["Order<br/>(immutable product)"]
+    DS["DeliveryService<br/>«Factory Method»"]
+    SH["Shipment<br/>(Courier / Post / Pickup)"]
+
+    Client -->|"customer() · add() · coupon() · build()"| B
+    B -->|"next() → BK-1004"| S
+    B -->|"creates"| O
+    Client -->|"dispatch(order)"| DS
+    DS -->|"makeShipment()"| SH
+    SH -->|"cost(for: order)"| O
+```
+
+
 ```swift
 /// A book sold by the online bookstore.
 public struct Book: Equatable {
@@ -121,6 +141,46 @@ public final class OrderNumberGenerator {
     }
 }
 ```
+
+#### Diagram — Singleton class structure
+
+`shared` is static (underlined) and `init()` is private (`-`), so every client goes through the same instance.
+
+```mermaid
+classDiagram
+    class OrderNumberGenerator {
+        <<Singleton>>
+        +OrderNumberGenerator shared$
+        +String prefix
+        -Int lastNumber
+        -NSLock lock
+        -init()
+        +next() String
+    }
+    class Checkout
+    class AdminPanel
+    class OrderBuilder
+    Checkout ..> OrderNumberGenerator : shared.next()
+    AdminPanel ..> OrderNumberGenerator : shared.next()
+    OrderBuilder ..> OrderNumberGenerator : shared.next()
+```
+
+#### Diagram — Singleton at runtime
+
+```mermaid
+sequenceDiagram
+    participant C as Checkout
+    participant A as Admin panel
+    participant G as OrderNumberGenerator.shared
+    C->>G: next()
+    G-->>C: BK-1001
+    A->>G: next()
+    G-->>A: BK-1002
+    C->>G: next()
+    G-->>C: BK-1003
+    Note over C,G: One instance → one counter → numbers never repeat
+```
+
 
 > **Drawback.** A Singleton is global state. Code that uses `OrderNumberGenerator.shared` directly is harder to test in isolation. In larger systems the instance is usually injected through a protocol, which is the Dependency Inversion Principle from the previous laboratory work.
 
@@ -227,6 +287,86 @@ public struct OrderDirector {
 }
 ```
 
+#### Diagram — Builder class structure
+
+```mermaid
+classDiagram
+    direction LR
+    class OrderDirector {
+        <<Director>>
+        +birthdayGift(email, book, address, message) Order
+        +studentPickup(email, books) Order
+    }
+    class OrderBuilder {
+        <<Builder>>
+        -String customerEmail
+        -List~Book~ items
+        -String shippingAddress
+        -Bool isGiftWrapped
+        -String giftMessage
+        -String couponCode
+        -List~String~ notes
+        +customer(email) OrderBuilder
+        +add(book, quantity) OrderBuilder
+        +shipTo(address) OrderBuilder
+        +giftWrap() OrderBuilder
+        +giftMessage(text) OrderBuilder
+        +coupon(code) OrderBuilder
+        +note(text) OrderBuilder
+        +build() Order
+    }
+    class Order {
+        <<Product>>
+        +String number
+        +String customerEmail
+        +List~Book~ items
+        +Double subtotal
+        +Double discount
+        +Double total
+        +summary() String
+    }
+    class OrderBuildError {
+        <<enumeration>>
+        missingCustomer
+        emptyCart
+        giftMessageWithoutWrap
+    }
+    class OrderNumberGenerator {
+        <<Singleton>>
+        +next() String
+    }
+    OrderDirector --> OrderBuilder : uses
+    OrderBuilder ..> Order : creates
+    OrderBuilder ..> OrderBuildError : throws
+    OrderBuilder ..> OrderNumberGenerator : order number
+```
+
+#### Diagram — Builder step by step
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant B as OrderBuilder
+    participant G as OrderNumberGenerator
+    participant O as Order
+    Client->>B: customer("augustin@example.md")
+    B-->>Client: self
+    Client->>B: add(cleanCode) · add(designPatterns)
+    B-->>Client: self
+    Client->>B: shipTo(...) · coupon("FAF10")
+    B-->>Client: self
+    Client->>B: build()
+    alt invalid (no customer / empty cart / message without wrap)
+        B-->>Client: throws OrderBuildError
+    else valid
+        B->>G: next()
+        G-->>B: BK-1004
+        B->>O: create immutable Order
+        B-->>Client: Order BK-1004 (873.00 MDL)
+    end
+```
+
+
 ### 3.3 Factory Method — DeliveryService
 
 📄 [`Sources/CreationalCore/FactoryMethod/Shipment.swift`](../Sources/CreationalCore/FactoryMethod/Shipment.swift) · [`Sources/CreationalCore/FactoryMethod/DeliveryService.swift`](../Sources/CreationalCore/FactoryMethod/DeliveryService.swift)
@@ -283,6 +423,71 @@ public struct StorePickupService: DeliveryService {
     public func makeShipment() -> Shipment { StorePickup() }
 }
 ```
+
+#### Diagram — Factory Method class structure
+
+The creator side (left) and the product side (right) mirror each other. Each concrete creator decides which concrete product to create.
+
+```mermaid
+classDiagram
+    class DeliveryService {
+        <<protocol · Creator>>
+        +makeShipment() Shipment
+        +dispatch(order) String
+    }
+    class Shipment {
+        <<protocol · Product>>
+        +String carrier
+        +String estimate
+        +String trackingPrefix
+        +cost(order) Double
+    }
+    class CourierDeliveryService {
+        +makeShipment() Shipment
+    }
+    class PostDeliveryService {
+        +makeShipment() Shipment
+    }
+    class StorePickupService {
+        +makeShipment() Shipment
+    }
+    class CourierShipment {
+        +cost(order) Double
+    }
+    class PostShipment {
+        +cost(order) Double
+    }
+    class StorePickup {
+        +cost(order) Double
+    }
+    DeliveryService <|.. CourierDeliveryService
+    DeliveryService <|.. PostDeliveryService
+    DeliveryService <|.. StorePickupService
+    Shipment <|.. CourierShipment
+    Shipment <|.. PostShipment
+    Shipment <|.. StorePickup
+    DeliveryService ..> Shipment : uses
+    CourierDeliveryService ..> CourierShipment : creates
+    PostDeliveryService ..> PostShipment : creates
+    StorePickupService ..> StorePickup : creates
+```
+
+#### Diagram — Factory Method at runtime
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant S as CourierDeliveryService
+    participant P as CourierShipment
+    Client->>S: dispatch(order BK-1005)
+    Note over S: shared logic from the protocol extension
+    S->>S: makeShipment()
+    S->>P: create
+    S->>P: cost(for: order)
+    P-->>S: 50.00 MDL (subtotal < 800)
+    S-->>Client: "BK-1005 -> Courier: shipping 50.00 MDL, next day, tracking CR-BK-1005"
+```
+
 
 | GoF role | In this project |
 |---|---|
@@ -387,6 +592,26 @@ let copy = hardcoverRO.clone()   // same settings, independent object
 copy.price = 280                 // the original still costs 300
 ```
 
+#### Diagram — Prototype
+
+```mermaid
+classDiagram
+    class Prototype {
+        <<interface>>
+        +clone() Prototype
+    }
+    class BookTemplate {
+        +String format
+        +String language
+        +Double price
+        +clone() BookTemplate
+    }
+    class Client
+    Prototype <|.. BookTemplate
+    Client ..> Prototype : clone()
+```
+
+
 ### 5.2 Object Pool
 
 A fixed set of expensive objects is created once and **reused**. A client acquires an object from the pool, uses it and releases it back, instead of creating and destroying it each time. This is typical for database connections, threads and sockets.
@@ -400,6 +625,37 @@ final class ConnectionPool {
     func release(_ c: DBConnection) { available.append(c) }
 }
 ```
+
+#### Diagram — Object Pool structure
+
+```mermaid
+classDiagram
+    class ConnectionPool {
+        -List~DBConnection~ available
+        +acquire() DBConnection
+        +release(connection)
+    }
+    class DBConnection {
+        +Int id
+    }
+    class Client
+    ConnectionPool o-- DBConnection : keeps ready
+    Client ..> ConnectionPool : acquire / release
+```
+
+#### Diagram — Object Pool lifecycle
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant P as ConnectionPool
+    C->>P: acquire()
+    P-->>C: DBConnection 3
+    Note over C: run queries
+    C->>P: release(connection 3)
+    Note over P: connection 3 is reused by the next client, not destroyed
+```
+
 
 > **Note.** A database connection should not be a Singleton. One shared connection becomes a bottleneck, is not safe for concurrent writes and cannot be replaced in tests. Object Pool is the right pattern for connections.
 
@@ -422,6 +678,38 @@ struct DarkThemeFactory: StoreThemeFactory {
 }
 // The screen receives one factory and gets a matching button + banner.
 ```
+
+#### Diagram — Abstract Factory
+
+One factory produces a whole matching family: the Light factory never creates a Dark button.
+
+```mermaid
+classDiagram
+    class StoreThemeFactory {
+        <<interface>>
+        +makeButton() Button
+        +makeBanner() Banner
+    }
+    class LightThemeFactory
+    class DarkThemeFactory
+    class Button {
+        <<interface>>
+    }
+    class Banner {
+        <<interface>>
+    }
+    StoreThemeFactory <|.. LightThemeFactory
+    StoreThemeFactory <|.. DarkThemeFactory
+    Button <|.. LightButton
+    Button <|.. DarkButton
+    Banner <|.. LightBanner
+    Banner <|.. DarkBanner
+    LightThemeFactory ..> LightButton : creates
+    LightThemeFactory ..> LightBanner : creates
+    DarkThemeFactory ..> DarkButton : creates
+    DarkThemeFactory ..> DarkBanner : creates
+```
+
 
 | | Factory Method | Abstract Factory |
 |---|---|---|
