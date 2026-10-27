@@ -14,6 +14,8 @@ Three creational patterns implemented in one online-bookstore project:
 
 Prototype, Object Pool and Abstract Factory are explained (with Swift examples) in the report.
 
+📄 **Report:** [report/REPORT.md](report/REPORT.md) · [PDF](report/Lab1_Creational_Patterns_Report.pdf) · [Word](report/Lab1_Creational_Patterns_Report.docx)
+
 ## Run
 
 ```bash
