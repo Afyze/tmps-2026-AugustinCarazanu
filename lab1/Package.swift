@@ -2,10 +2,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "SOLID",
+    name: "CreationalPatterns",
     targets: [
-        .target(name: "SOLIDCore"),
-        .executableTarget(name: "SOLIDDemo", dependencies: ["SOLIDCore"]),
-        .testTarget(name: "SOLIDTests", dependencies: ["SOLIDCore"])
+        .target(name: "CreationalCore"),
+        .executableTarget(name: "CreationalDemo", dependencies: ["CreationalCore"]),
+        .testTarget(name: "CreationalTests", dependencies: ["CreationalCore"])
     ]
 )

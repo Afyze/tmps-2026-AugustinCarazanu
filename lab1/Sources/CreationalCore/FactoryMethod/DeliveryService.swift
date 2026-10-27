@@ -7,7 +7,7 @@
 // logic lives in a protocol extension.
 //
 // Adding a new carrier = one new Shipment + one new service.
-// `dispatch(_:)` is never edited (Open/Closed Principle from Lab 1).
+// `dispatch(_:)` is never edited (Open/Closed Principle from Lab 0).
 
 public protocol DeliveryService {
     /// The factory method.

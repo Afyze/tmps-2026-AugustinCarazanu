@@ -1,40 +1,25 @@
-# Laboratory Work No. 1 — SOLID Principles in Swift
+# Laboratory Work No. 1 — Creational Design Patterns in Swift
 
 **Discipline:** Techniques and Mechanisms of Software Design (TMPS)
 **Student:** Augustin Carazanu, FAF-243
 **Checked by:** assist. univ. Daniel Istrati
 
-Three SOLID principles applied to a small online bookstore, each with a
-*before* (violating) and *after* (refactored) version.
+Three creational patterns implemented in one online-bookstore project:
 
-| Principle | Before | After |
+| Pattern | Where | What it does here |
 |---|---|---|
-| **S** — Single Responsibility | `OrderManager` validates, prices, saves and emails | `OrderValidator`, `PriceCalculator`, `OrderRepository`, `OrderNotifier`, coordinated by `OrderService` |
-| **O** — Open/Closed | `PaymentProcessor` switches over a `PaymentType` enum | `PaymentMethod` protocol; `MPayPayment` added in a new file with zero edits |
-| **D** — Dependency Inversion | `NotificationService` creates a concrete `EmailSender` | Service depends on `MessageSender`, injected via `init` (email, SMS, multi-channel, mock) |
+| **Singleton** | `Singleton/OrderNumberGenerator.swift` | One thread-safe generator of unique order numbers (`BK-1001`, ...) shared by the whole app |
+| **Builder** | `Builder/Order.swift`, `Builder/OrderBuilder.swift` | Builds immutable `Order`s step by step with validation; `OrderDirector` has presets (gift, student pickup) |
+| **Factory Method** | `FactoryMethod/Shipment.swift`, `FactoryMethod/DeliveryService.swift` | Each `DeliveryService` decides which `Shipment` to create via `makeShipment()`; `dispatch()` stays unchanged |
 
-## Structure
-
-```
-lab1/
-├── Package.swift
-├── Sources/
-│   ├── SOLIDCore/
-│   │   ├── Models.swift
-│   │   ├── SRP/  SRPBefore.swift  SRPAfter.swift
-│   │   ├── OCP/  OCPBefore.swift  OCPAfter.swift  MPayPayment.swift
-│   │   └── DIP/  DIPBefore.swift  DIPAfter.swift
-│   └── SOLIDDemo/main.swift
-├── Tests/SOLIDTests/SOLIDTests.swift
-└── report/Lab1_SOLID_Report.docx
-```
+Prototype, Object Pool and Abstract Factory are explained (with Swift examples) in the report.
 
 ## Run
 
 ```bash
 cd lab1
-swift run SOLIDDemo   # prints before/after output for every principle
-swift test            # unit tests (incl. a mock sender for DIP)
+swift run CreationalDemo
+swift test
 ```
 
-Requires Swift 5.9+ (Xcode 15+ on macOS, or the Swift toolchain on Linux).
+In Xcode: **File → Open… → `lab1/Package.swift`**, scheme **CreationalDemo**, ⌘R to run, ⌘U for tests.

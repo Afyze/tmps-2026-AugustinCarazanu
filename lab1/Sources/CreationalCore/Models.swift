@@ -1,6 +1,6 @@
 import Foundation
 
-/// A book sold by the online bookstore (the same domain as Lab 1).
+/// A book sold by the online bookstore (the same domain as Lab 0).
 public struct Book: Equatable {
     public let title: String
     public let author: String
