@@ -578,7 +578,456 @@ Each variant below is added with **new classes only**. For the console, add one 
 
 ---
 
-## 6. Conclusions
+## 6. The other behavioral patterns (theory)
+
+The order lifecycle needed State, Command and Observer. The remaining behavioral patterns are described below on the same bookstore, with a class diagram and a short sketch, together with the reason they were not part of this lab. Two of them already appear in a small form in the code (Template Method and Memento) and one is close to the console (Interpreter).
+
+### 6.1 Strategy
+
+**Idea.** Define a family of interchangeable algorithms behind one interface. The client chooses which one to use, and can change it at runtime.
+
+**In the bookstore.** Shipping cost: standard (free over 500 MDL, otherwise 40), express (60), pickup from the shop (0). The cart does not know the formulas, it only calls `cost(for:)`.
+
+```mermaid
+classDiagram
+    class Cart {
+        <<Context>>
+        +shipping ShippingStrategy
+        +total() Double
+    }
+    class ShippingStrategy {
+        <<interface · Strategy>>
+        +cost(for total) Double
+    }
+    class StandardShipping {
+        +cost(for total) Double
+    }
+    class ExpressShipping {
+        +cost(for total) Double
+    }
+    class PickupShipping {
+        +cost(for total) Double
+    }
+    Cart o--> ShippingStrategy : uses
+    ShippingStrategy <|.. StandardShipping
+    ShippingStrategy <|.. ExpressShipping
+    ShippingStrategy <|.. PickupShipping
+```
+
+```swift
+protocol ShippingStrategy { func cost(for total: Double) -> Double }
+
+struct StandardShipping: ShippingStrategy { func cost(for t: Double) -> Double { t >= 500 ? 0 : 40 } }
+struct ExpressShipping:  ShippingStrategy { func cost(for t: Double) -> Double { 60 } }
+struct PickupShipping:   ShippingStrategy { func cost(for t: Double) -> Double { 0 } }
+
+final class Cart {
+    var items: [OrderItem] = []
+    var shipping: ShippingStrategy = StandardShipping()
+    func total() -> Double {
+        let goods = items.reduce(0) { $0 + $1.price }
+        return goods + shipping.cost(for: goods)
+    }
+}
+cart.shipping = ExpressShipping()              // chosen by the client
+```
+
+**Difference from State.** The class diagram is the same shape. In State the state object changes the context itself (`PlacedState` moves the order to `PackedState`); in Strategy the client picks the algorithm and the strategies do not know each other.
+
+**Why it was not used.** Lab 2 already models delivery as a decorator (`ExpressDelivery`). Strategy would replace it if the shop had to choose exactly one shipping method per order.
+
+### 6.2 Template Method
+
+**Idea.** A base class fixes the steps of an algorithm in one method; subclasses override only some steps.
+
+**Already in the code, in a small form.** `OrderTransitionCommand.execute()` is `final`: it saves the state, calls `perform()`, and remembers the old state only on success. Each concrete command overrides only `perform()`. The sketch below shows a fuller example: exporting reports.
+
+```mermaid
+classDiagram
+    class ReportExporter {
+        <<abstract>>
+        +export() String
+        #header() String
+        #body() String
+        #footer() String
+    }
+    class SalesReport {
+        #body() String
+    }
+    class StockReport {
+        #body() String
+        #footer() String
+    }
+    ReportExporter <|-- SalesReport
+    ReportExporter <|-- StockReport
+    note for ReportExporter "export is final and calls header, body, footer in this order"
+```
+
+```swift
+class ReportExporter {
+    final func export() -> String {             // the template: order is fixed
+        header() + body() + footer()
+    }
+    func header() -> String { "Online bookstore\n" }
+    func body() -> String { fatalError("subclass must override") }
+    func footer() -> String { "\n---" }
+}
+
+final class SalesReport: ReportExporter {
+    let orders: [Receipt]
+    init(orders: [Receipt]) { self.orders = orders }
+    override func body() -> String { orders.map(\.text).joined(separator: "\n") }
+}
+```
+
+**Difference from Strategy.** Template Method uses inheritance and varies *a step*; Strategy uses composition and replaces *the whole algorithm*.
+
+### 6.3 Chain of Responsibility
+
+**Idea.** Pass a request along a chain of handlers. Each handler either handles it (and stops the chain) or passes it to the next one.
+
+**In the bookstore.** Before checkout, an order goes through checks: stock → card limit → delivery address → fraud check. The first check that fails stops the chain with a reason. A new check is a new handler inserted in the chain, the others do not change.
+
+```mermaid
+classDiagram
+    class OrderCheck {
+        <<abstract · Handler>>
+        +next OrderCheck?
+        +check(draft) String?
+    }
+    class StockCheck {
+        +check(draft) String?
+    }
+    class CardLimitCheck {
+        +check(draft) String?
+    }
+    class AddressCheck {
+        +check(draft) String?
+    }
+    OrderCheck <|-- StockCheck
+    OrderCheck <|-- CardLimitCheck
+    OrderCheck <|-- AddressCheck
+    OrderCheck o--> OrderCheck : next
+```
+
+```swift
+class OrderCheck {
+    var next: OrderCheck?
+    @discardableResult func then(_ handler: OrderCheck) -> OrderCheck { next = handler; return handler }
+    func check(_ draft: OrderDraft) -> String? { next?.check(draft) }   // default: pass on
+}
+
+final class StockCheck: OrderCheck {
+    let stock: StockService
+    init(stock: StockService) { self.stock = stock }
+    override func check(_ draft: OrderDraft) -> String? {
+        if let missing = draft.items.first(where: { !stock.isAvailable($0.book) }) {
+            return "'\(missing.book.title)' is out of stock"            // handled: stop
+        }
+        return super.check(draft)                                       // pass to next
+    }
+}
+
+let chain = StockCheck(stock: stock)
+chain.then(CardLimitCheck(limit: 5000)).then(AddressCheck())
+let problem = chain.check(draft)                                        // nil = all passed
+```
+
+**Why it was not used.** In Lab 2 the facade does only two checks (stock and payment) in a fixed order. A chain becomes worth it when checks are many or configurable.
+
+### 6.4 Iterator
+
+**Idea.** Give sequential access to the elements of a collection without exposing how it is stored.
+
+**In the bookstore.** The catalogue can be traversed page by page or only for one author, without the client knowing whether books live in an array, a dictionary or a remote API. In Swift the pattern is built into the language: `Sequence` + `IteratorProtocol`, used by `for … in`.
+
+```mermaid
+classDiagram
+    class Sequence {
+        <<protocol · Aggregate>>
+        +makeIterator() Iterator
+    }
+    class IteratorProtocol {
+        <<protocol · Iterator>>
+        +next() Element?
+    }
+    class Catalog {
+        <<ConcreteAggregate>>
+        -books Book[]
+        +makeIterator() AuthorIterator
+    }
+    class AuthorIterator {
+        <<ConcreteIterator>>
+        -index Int
+        -author String
+        +next() Book?
+    }
+    Sequence <|.. Catalog
+    IteratorProtocol <|.. AuthorIterator
+    Catalog ..> AuthorIterator : creates
+```
+
+```swift
+struct AuthorIterator: IteratorProtocol {
+    let books: [Book]; let author: String
+    private var index = 0
+    init(books: [Book], author: String) { self.books = books; self.author = author }
+    mutating func next() -> Book? {
+        while index < books.count {
+            defer { index += 1 }
+            if books[index].author == author { return books[index] }
+        }
+        return nil
+    }
+}
+
+struct BooksBy: Sequence {
+    let catalog: [Book]; let author: String
+    func makeIterator() -> AuthorIterator { AuthorIterator(books: catalog, author: author) }
+}
+
+for book in BooksBy(catalog: allBooks, author: "Robert C. Martin") { print(book.title) }
+```
+
+**Why it was not implemented separately.** Swift collections already are iterators; the project uses them everywhere (`for observer in current`, `items.reduce`). Writing a custom one adds nothing to the order lifecycle.
+
+### 6.5 Mediator
+
+**Idea.** Objects do not talk to each other directly; they talk only to a mediator, which coordinates them. This removes many-to-many dependencies.
+
+**In the bookstore.** On the checkout screen the currency picker, the coupon field, the shipping picker and the "Pay" button influence each other (a new currency changes the total, a coupon changes the total, the button is enabled only when everything is valid). Each control only tells the mediator "I changed".
+
+```mermaid
+classDiagram
+    class CheckoutMediator {
+        <<interface · Mediator>>
+        +changed(component)
+    }
+    class CheckoutForm {
+        <<ConcreteMediator>>
+        +changed(component)
+        -recalculateTotal()
+    }
+    class CurrencyPicker {
+        <<Colleague>>
+    }
+    class CouponField {
+        <<Colleague>>
+    }
+    class PayButton {
+        <<Colleague>>
+        +isEnabled Bool
+    }
+    CheckoutMediator <|.. CheckoutForm
+    CurrencyPicker --> CheckoutMediator : notifies
+    CouponField --> CheckoutMediator : notifies
+    CheckoutForm --> CurrencyPicker
+    CheckoutForm --> CouponField
+    CheckoutForm --> PayButton
+```
+
+```swift
+protocol CheckoutMediator: AnyObject { func changed(_ component: FormComponent) }
+
+final class CheckoutForm: CheckoutMediator {
+    let currency = CurrencyPicker(), coupon = CouponField(), pay = PayButton()
+    init() { [currency, coupon].forEach { $0.mediator = self } }
+
+    func changed(_ component: FormComponent) {
+        if component === currency || component === coupon { recalculateTotal() }
+        pay.isEnabled = coupon.isValid && currency.selected != nil
+    }
+    private func recalculateTotal() { /* uses Lab 2 rates and decorators */ }
+}
+```
+
+**Difference from Observer.** Observer is one-to-many in one direction (the order announces, observers react and never answer). In a Mediator the components communicate both ways, but only through the centre.
+
+**Why it was not used.** The project is a console application without interdependent UI components.
+
+### 6.6 Memento
+
+**Idea.** Capture an object's internal state in a snapshot, without exposing that state, so the object can be restored later.
+
+**Already in the code, in a small form.** `OrderTransitionCommand` keeps `stateBefore` and gives it back to `order.revert(to:)` on undo. That is a one-field memento. A full Memento would snapshot a bigger object, for example the whole cart before every change.
+
+```mermaid
+classDiagram
+    class Cart {
+        <<Originator>>
+        -items OrderItem[]
+        -coupon String?
+        +save() Memento
+        +restore(memento)
+    }
+    class Memento {
+        <<Memento · opaque>>
+        -items OrderItem[]
+        -coupon String?
+    }
+    class CartHistory {
+        <<Caretaker>>
+        -snapshots Memento[]
+        +push(memento)
+        +pop() Memento?
+    }
+    Cart ..> Memento : creates
+    CartHistory o--> "many" Memento : keeps
+```
+
+```swift
+final class Cart {
+    private var items: [OrderItem] = []
+    private var coupon: String?
+
+    struct Memento {                            // fields are fileprivate: only Cart reads them
+        fileprivate let items: [OrderItem]
+        fileprivate let coupon: String?
+    }
+    func save() -> Memento { Memento(items: items, coupon: coupon) }
+    func restore(_ m: Memento) { items = m.items; coupon = m.coupon }
+}
+
+final class CartHistory {                       // stores snapshots, never looks inside
+    private var snapshots: [Cart.Memento] = []
+    func push(_ m: Cart.Memento) { snapshots.append(m) }
+    func pop() -> Cart.Memento? { snapshots.popLast() }
+}
+```
+
+**Command undo vs Memento.** Command undo knows the *inverse operation* (go back to the previous state). Memento stores a *copy* of the state and does not need to know what changed.
+
+### 6.7 Visitor
+
+**Idea.** Add new operations to a hierarchy of classes without changing those classes. Each element has `accept(visitor)` and calls back the right `visit` method (double dispatch).
+
+**In the bookstore.** Cart entries are of different types (books, gift cards, bundles). New operations keep appearing: VAT calculation, JSON export, warehouse picking list. Each operation is one visitor; the entry classes stay untouched.
+
+```mermaid
+classDiagram
+    class CartVisitor {
+        <<interface · Visitor>>
+        +visit(book)
+        +visit(giftCard)
+    }
+    class VATVisitor {
+        +total Double
+        +visit(book)
+        +visit(giftCard)
+    }
+    class PickingListVisitor {
+        +lines String[]
+        +visit(book)
+        +visit(giftCard)
+    }
+    class Visitable {
+        <<interface · Element>>
+        +accept(visitor)
+    }
+    class BookItem {
+        +accept(visitor)
+    }
+    class GiftCard {
+        +accept(visitor)
+    }
+    CartVisitor <|.. VATVisitor
+    CartVisitor <|.. PickingListVisitor
+    Visitable <|.. BookItem
+    Visitable <|.. GiftCard
+    Visitable ..> CartVisitor : accept calls visit
+```
+
+```swift
+protocol CartVisitor { func visit(_ book: BookItem); func visit(_ card: GiftCard) }
+protocol Visitable { func accept(_ visitor: CartVisitor) }
+
+extension BookItem: Visitable { func accept(_ v: CartVisitor) { v.visit(self) } }
+extension GiftCard: Visitable { func accept(_ v: CartVisitor) { v.visit(self) } }
+
+final class VATVisitor: CartVisitor {
+    private(set) var total = 0.0
+    func visit(_ book: BookItem) { total += book.price * 0.08 }   // reduced VAT on books
+    func visit(_ card: GiftCard) { }                              // no VAT on gift cards
+}
+
+let vat = VATVisitor()
+cartEntries.forEach { $0.accept(vat) }
+```
+
+**Why it was not used.** The project has one kind of cart entry (`OrderItem`) and new behaviour is added with decorators. Visitor is worth it when the element types are stable and the operations change often.
+
+### 6.8 Interpreter
+
+**Idea.** Define a small grammar and represent each rule as a class; a sentence becomes a tree of objects that evaluates itself.
+
+**In the bookstore.** A search language: `author:Martin AND price<500`. Each rule is a node in the expression tree.
+
+**Close to the code.** `OrderConsole` already turns typed text (`queue ship`, `subscribe courier`) into actions. It is a very small command interpreter, written with a `switch` on words instead of an expression tree.
+
+```mermaid
+classDiagram
+    class BookFilter {
+        <<interface · AbstractExpression>>
+        +matches(book) Bool
+    }
+    class AuthorIs {
+        <<TerminalExpression>>
+        +name String
+        +matches(book) Bool
+    }
+    class PriceBelow {
+        <<TerminalExpression>>
+        +max Double
+        +matches(book) Bool
+    }
+    class And {
+        <<NonterminalExpression>>
+        +left BookFilter
+        +right BookFilter
+        +matches(book) Bool
+    }
+    BookFilter <|.. AuthorIs
+    BookFilter <|.. PriceBelow
+    BookFilter <|.. And
+    And o--> "2" BookFilter : operands
+```
+
+```swift
+protocol BookFilter { func matches(_ book: Book) -> Bool }
+
+struct AuthorIs: BookFilter { let name: String
+    func matches(_ b: Book) -> Bool { b.author.contains(name) } }
+struct PriceBelow: BookFilter { let max: Double
+    func matches(_ b: Book) -> Bool { b.price < max } }
+struct And: BookFilter { let left: BookFilter, right: BookFilter
+    func matches(_ b: Book) -> Bool { left.matches(b) && right.matches(b) } }
+
+// "author:Martin AND price<500" parsed into:
+let query = And(left: AuthorIs(name: "Martin"), right: PriceBelow(max: 500))
+let results = allBooks.filter(query.matches)     // Clean Code (450 MDL)
+```
+
+**Why it was not used.** A full grammar is heavy for a few fixed console commands; the `switch` in `OrderConsole` is simpler and enough.
+
+### 6.9 Summary of all behavioral patterns
+
+| Pattern | Problem it solves | Status in this lab |
+|---|---|---|
+| State | behaviour depends on the object's state | implemented: `OrderState` and 5 states |
+| Command | requests as objects (queue, history, undo) | implemented: `OrderCommand`, `CommandProcessor` |
+| Observer | one-to-many notification | implemented: `OrderEventPublisher` and 3 observers |
+| Template Method | fixed algorithm, variable steps | partly: `OrderTransitionCommand.execute` / `perform` |
+| Memento | save and restore state | partly: `stateBefore` used by undo |
+| Interpreter | evaluate sentences of a small language | partly: `OrderConsole` commands (`switch`, no tree) |
+| Strategy | interchangeable algorithms | theory: shipping cost |
+| Chain of Responsibility | a request passed along handlers | theory: order checks |
+| Iterator | traverse a collection without exposing it | theory: built into Swift (`Sequence`) |
+| Mediator | many components talk through one centre | theory: checkout form |
+| Visitor | new operations without changing classes | theory: VAT, picking list |
+
+---
+
+## 7. Conclusions
 
 **What was harder than expected.**
 
