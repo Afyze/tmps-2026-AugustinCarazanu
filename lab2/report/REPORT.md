@@ -594,7 +594,202 @@ Every variant below is added with **new classes only**:
 
 ---
 
-## 6. Conclusions
+## 6. The other structural patterns (theory)
+
+The checkout needed Adapter, Proxy, Decorator and Facade. The three remaining structural patterns are described below on the same bookstore, with a class diagram and a short sketch, together with the reason they were not part of this lab.
+
+### 6.1 Bridge
+
+**Idea.** Split an abstraction from its implementation so the two can vary independently. The abstraction holds a reference to the implementation (the "bridge") instead of inheriting from it.
+
+**In the bookstore.** Notifications have two dimensions: *what* is sent (order confirmation, promotion) and *how* it is sent (email, SMS). With inheritance that is 2 × 2 = 4 classes (`EmailOrderConfirmation`, `SmsPromotion`, …), and every new channel multiplies them. With Bridge it is 2 + 2.
+
+```mermaid
+classDiagram
+    class Notification {
+        <<Abstraction>>
+        #channel Channel
+        +send()
+    }
+    class OrderConfirmation {
+        <<RefinedAbstraction>>
+        +send()
+    }
+    class Promotion {
+        <<RefinedAbstraction>>
+        +send()
+    }
+    class Channel {
+        <<interface · Implementor>>
+        +deliver(to, text)
+    }
+    class EmailChannel {
+        <<ConcreteImplementor>>
+        +deliver(to, text)
+    }
+    class SmsChannel {
+        <<ConcreteImplementor>>
+        +deliver(to, text)
+    }
+    Notification <|-- OrderConfirmation
+    Notification <|-- Promotion
+    Notification o--> Channel : bridge
+    Channel <|.. EmailChannel
+    Channel <|.. SmsChannel
+```
+
+```swift
+protocol Channel { func deliver(to customer: String, text: String) }
+
+class Notification {
+    let channel: Channel                       // the bridge
+    init(channel: Channel) { self.channel = channel }
+    func send(to customer: String) {}
+}
+final class OrderConfirmation: Notification {
+    let orderNumber: String
+    init(orderNumber: String, channel: Channel) {
+        self.orderNumber = orderNumber
+        super.init(channel: channel)
+    }
+    override func send(to customer: String) {
+        channel.deliver(to: customer, text: "Order \(orderNumber) confirmed")
+    }
+}
+
+OrderConfirmation(orderNumber: "BK-1001", channel: SmsChannel()).send(to: "+373...")
+```
+
+**Why it was not used.** The shop has a single channel (`EmailOutbox`) behind `NotificationService`. Bridge pays off only when both dimensions grow.
+
+### 6.2 Composite
+
+**Idea.** Compose objects into a tree and let the client treat a single object and a group of objects through the same interface.
+
+**In the bookstore.** A *bundle* ("Clean Code + Design Patterns, 15% off") has a price like a book, but it is made of books or of other bundles. The cart only asks every entry for `price`.
+
+```mermaid
+classDiagram
+    class CartEntry {
+        <<interface · Component>>
+        +title String
+        +price Double
+    }
+    class SingleBook {
+        <<Leaf>>
+        +title String
+        +price Double
+    }
+    class Bundle {
+        <<Composite>>
+        -children CartEntry[]
+        -discount Double
+        +add(entry)
+        +price Double
+    }
+    CartEntry <|.. SingleBook
+    CartEntry <|.. Bundle
+    Bundle o--> "many" CartEntry : children
+```
+
+```swift
+protocol CartEntry { var title: String { get }; var price: Double { get } }
+
+struct SingleBook: CartEntry {
+    let book: Book
+    var title: String { book.title }
+    var price: Double { book.price }
+}
+
+struct Bundle: CartEntry {
+    let title: String
+    let children: [CartEntry]
+    let discount: Double                       // 0.15 = 15% off
+    var price: Double { children.reduce(0) { $0 + $1.price } * (1 - discount) }
+}
+
+let starter = Bundle(title: "Starter pack",
+                     children: [SingleBook(book: cleanCode), SingleBook(book: designPatterns)],
+                     discount: 0.15)          // (450 + 520) * 0.85 = 824.50 MDL
+```
+
+**Difference from Decorator.** Both are recursive. A decorator wraps **one** object and adds behaviour; a composite holds **many** children and combines their results.
+
+**Why it was not used.** The cart in this lab is a flat list of `OrderItem`. Bundles would be the natural next feature.
+
+### 6.3 Flyweight
+
+**Idea.** When there are very many similar objects, share the common (intrinsic) state between them and keep only the unique (extrinsic) state in each object. A factory hands out the shared instances.
+
+**In the bookstore.** The warehouse holds 10 000 physical copies of the same title. Title, author and cover image are identical for all of them; only the shelf and the inventory code differ.
+
+```mermaid
+classDiagram
+    class BookInfo {
+        <<Flyweight · shared, intrinsic>>
+        +isbn String
+        +title String
+        +author String
+        +cover Data
+    }
+    class BookInfoFactory {
+        <<FlyweightFactory>>
+        -pool map isbn to BookInfo
+        +info(isbn) BookInfo
+    }
+    class PhysicalCopy {
+        <<Context · extrinsic>>
+        +info BookInfo
+        +shelf String
+        +inventoryCode String
+    }
+    BookInfoFactory o--> "many" BookInfo : pool
+    PhysicalCopy --> BookInfo : shares
+    PhysicalCopy ..> BookInfoFactory : gets info from
+```
+
+```swift
+final class BookInfo {                          // shared, never copied
+    let isbn: String, title: String, author: String, cover: Data
+    init(isbn: String, title: String, author: String, cover: Data) {
+        self.isbn = isbn; self.title = title; self.author = author; self.cover = cover
+    }
+}
+
+final class BookInfoFactory {
+    private var pool: [String: BookInfo] = [:]
+    func info(isbn: String, load: () -> BookInfo) -> BookInfo {
+        if let shared = pool[isbn] { return shared }
+        let created = load()
+        pool[isbn] = created
+        return created
+    }
+}
+
+struct PhysicalCopy {                           // 10 000 of these, all small
+    let info: BookInfo                          // reference to the shared object
+    let shelf: String
+    let inventoryCode: String
+}
+```
+
+**Why it was not used.** The demo works with a handful of books, so there is no memory problem to solve. Flyweight is an optimisation and only makes sense with large numbers of objects.
+
+### 6.4 Summary of all structural patterns
+
+| Pattern | Problem it solves | Status in this lab |
+|---|---|---|
+| Adapter | an incompatible interface (BNM XML) | implemented: `BNMExchangeRateAdapter` |
+| Proxy | control access to a real object (cache) | implemented: `CachingRateProxy` |
+| Decorator | add behaviour to one object at runtime | implemented: `GiftWrap`, `ExpressDelivery`, `Insurance`, `StudentDiscount` |
+| Facade | one simple entry point to many subsystems | implemented: `CheckoutFacade` |
+| Bridge | two dimensions that grow independently | theory: notification type × channel |
+| Composite | treat one item and a group the same way | theory: book bundles |
+| Flyweight | many objects with shared state | theory: physical copies of one title |
+
+---
+
+## 7. Conclusions
 
 **What was harder than expected.**
 
