@@ -5,6 +5,10 @@ import PackageDescription
 // (Book model + the OrderNumberGenerator Singleton).
 let package = Package(
     name: "StructuralPatterns",
+    products: [
+        // Lab 3 builds on this library (checkout Facade, decorated items, notifications).
+        .library(name: "StructuralCore", targets: ["StructuralCore"])
+    ],
     dependencies: [
         .package(path: "../lab1")
     ],
