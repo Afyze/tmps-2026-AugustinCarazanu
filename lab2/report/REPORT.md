@@ -495,7 +495,36 @@ All tests run with one command from the `lab2` folder:
 swift test
 ```
 
-<!-- TEST-LOG -->
+Run on macOS, 25.11.2026 09:40, Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)
+
+```
+Test Case '-[StructuralTests.AdapterTests testBaseAndUnknownCurrencies]' passed (0.001 seconds).
+Test Case '-[StructuralTests.AdapterTests testBuildsOfficialURL]' passed (0.000 seconds).
+Test Case '-[StructuralTests.AdapterTests testConvertsThroughTargetInterface]' passed (0.000 seconds).
+Test Case '-[StructuralTests.AdapterTests testDividesValueByNominal]' passed (0.000 seconds).
+Test Case '-[StructuralTests.AdapterTests testTranslatesBNMXMLIntoRates]' passed (0.000 seconds).
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Case '-[StructuralTests.DecoratorTests testBaseDecoratorForwardsUnchanged]' passed (0.000 seconds).
+Test Case '-[StructuralTests.DecoratorTests testDiscountDependsOnWhatItWraps]' passed (0.000 seconds).
+Test Case '-[StructuralTests.DecoratorTests testEachDecoratorAddsItsPart]' passed (0.000 seconds).
+Test Case '-[StructuralTests.DecoratorTests testStackedInAnyOrderGiveSameResult]' passed (0.000 seconds).
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Case '-[StructuralTests.FacadeTests testCallsSubsystemsInTheRightOrder]' passed (0.000 seconds).
+Test Case '-[StructuralTests.FacadeTests testDeclinedPaymentReservesNothing]' passed (0.000 seconds).
+Test Case '-[StructuralTests.FacadeTests testOutOfStockStopsBeforePayment]' passed (0.000 seconds).
+Test Case '-[StructuralTests.FacadeTests testUnknownCurrencyIsNeverCharged]' passed (0.000 seconds).
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Case '-[StructuralTests.IntegrationTests testClientToFacadeToProxyToAdapter]' passed (0.000 seconds).
+Test Case '-[StructuralTests.IntegrationTests testFactoryReturnsProxyAroundAdapter]' passed (0.000 seconds).
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Case '-[StructuralTests.ProxyTests testCallsRealProviderOncePerCurrency]' passed (0.000 seconds).
+Test Case '-[StructuralTests.ProxyTests testDoesNotCacheMissingRates]' passed (0.000 seconds).
+Test Case '-[StructuralTests.ProxyTests testPassesAnswersThroughUnchanged]' passed (0.000 seconds).
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.003 (0.011) seconds
+```
+
 
 ## 4. Demo
 
